@@ -1,0 +1,305 @@
+conf.lisp.template
+==================
+This seems to be intended so that the bitcoin code can be configured, but
+is in an incomplete state.   It's to set URLs and username/password.
+
+bitcoinc.lisp
+============
+JSON has format {"jsonrpc": "1.0", "id": "curltest", "method": method, "params": <list of params>}'
+
+bc-bestblockhash
+Calls (bitcoind-chain-rpc "getbestblockhash")
+JSON params field is [].
+
+bc-block-verbose-2
+Calls (bitcoind-chain-rpc "getblock" <hash> 2)
+<hash> is the value returned by bc-bestblockhash
+JSON params field is [<hash>].
+
+bc-descinfo
+Calls (bitcoind-util-rpc "getdescriptorinfo" prevalidated-desc)
+
+bc-deriveaddress1
+Calls (bitcoind-util-rpc "deriveaddresses" descriptor (list index index))
+
+bc-sign
+Calls (bitcoind-util-rpc "signmessage" address message)
+
+bitcoind-chain-rpc
+Calls (apply #'bitcoind-rpc
+	     *bitcoind-chain-conn* *bitcoind-chain-url*
+	     *bitcoind-chain-userpass* meth params)
+
+bitcoind-util-rpc
+Calls (apply #'bitcoind-rpc
+	     *bitcoind-util-conn* *bitcoind-util-url*
+	     *bitcoind-util-userpass* meth params)
+
+bitcoind-rpc
+Sends request on conn to url with userpass, which has format ("<user>" "<pass>")
+(http-ka-request ,conn ,url :basic-authorization userpass
+		 :method :post :force-binary t
+		 :content-type "application/json"
+		 :content
+		 ,(encode-json-alist-to-string (list '("id" . "")
+						     '("jsonrpc" . "1.0")
+						     (cons "method" meth)
+						     (cons "params" params))))
+
+********************************************************************************
+
+http-ka.lisp
+============
+http-ka-request -> http-ka-request2
+
+(apply #'http-request
+       (append http-request-args (list :close nil :stream (car conn))))
+
+This calls http-request, which is a drakma function.   See
+
+https://edicl.github.io/drakma/#examples
+
+for examples of its use.   E.g. (drakma:http-request "http://lisp.org/")
+returns a string containing the contents of the lisp.org web page.
+
+bitcoinc.lisp
+=============
+bitcoind-rpc -> http-ka-request
+bitcoind-chain-rpc -> bitcoind-rpc
+bitcoind-util-rpc -> bitcoind-rpc
+bc-bestblockhash -> bitcoind-chain-rpc
+bc-block-verbose-2 -> bitcoind-chain-rpc
+bc-descinfo -> bitcoind-util-rpc
+bc-deriveaddress1 -> bitcoind-util-rpc
+bc-sign -> bitcoind-util-rpc
+
+bitcoind-rpc
+------------
+See https://developer.bitcoin.org/reference/rpc/index.html,
+and in particular
+https://developer.bitcoin.org/reference/rpc/getbestblockhash.html
+https://developer.bitcoin.org/reference/rpc/getblock.html
+https://developer.bitcoin.org/reference/rpc/getdescriptorinfo.html
+https://developer.bitcoin.org/reference/rpc/deriveaddresses.html
+https://developer.bitcoin.org/reference/rpc/signmessage.html
+
+Arguments of bitcoind-rpc are conn url userpass meth &rest params)
+
+Conn appears to be defined as (NIL) and not set anywhere.
+
+There are two separate connexions, specified by a URL,
+and a username/password:
+bitcoind-chain (used when meth is one of getbestblockhash, getblock)
+bitcoind-util (used when meth is one of getdescriptorinfo, deriveaddresses,
+signmessage)
+
+bitcoind-rpc builds and calls bitcoind, with the parameter list
+converted into JSON, e.g. for getbestblockhash, meth = getbestblockhash,
+params = null.   In cURL, the command would look something like
+
+curl --user myusername --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "getbestblockhash", "params": []}' -H 'content-type: text/plain;' http://127.0.0.1:8332/
+
+127.0.0.1 is localhost, which doesn't make sense when connecting remotely
+to bitcoind.   the URL string is set to "http://localhost:18443",
+and *bitcoind-util-userpass* is set to ("<user>" "<pass>"), after loading
+conf.lisp.template.
+
+If the bitcoind-rpc call doesn't result in an error, the result is
+converted into characters which as parsed as a JSON object, from which the
+result field is selected and returned.
+
+
+
+getdescriptorinfo takes an output script descriptor as its parameter.
+Output script descriptors are strings that contain all the information
+necessary to allow a wallet or other program to track payments made
+to or spent from a particular script or set of related scripts
+(i.e. an address or a set of related addresses such as in an HD wallet).
+
+See https://github.com/bitcoin/bitcoin/blob/master/doc/descriptors.md
+
+deriveaddresses takes an output script descriptor and a numeric range.
+Returns an array of addresses.
+
+
+signmessage takes a bitcoin address and a (string) message.
+
+E.g.
+
+curl --user myusername --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "signmessage", "params": ["1D1ZrZNe3JUo7ZycKEYQQiQAWd9y54F4XX", "my message"]}' -H 'content-type: text/plain;' http://127.0.0.1:8332/
+
+chain.lisp
+==========
+(defstruct blk hash height)
+getbestblockhash -> bc-bestblockhash
+getblock -> bc-block-verbose-2
+filter-decode-vouts
+decode-tx -> filter-decode-vouts
+getblock2 -> getblock
+prev-block -> getblock2
+higher-blocks -> prev-block
+chain-diff -> higher-blocks
+chain-diff-vout-do -> getblock2
+get-block-at-depth -> getblock2
+
+getbestblockhash
+----------------
+getbestblockhash takes no params and returns the hash of the best (tip)
+block in the most-work fully-validated chain.
+
+getBlock
+--------
+getBlock calls the bitcoind function getblock with two params, a block hash
+(e.g. the value returned by getbestblockhash), and an optional number
+indicating the output verbosity (called with value 2).
+The bitcoind function returns a JSON object with format (omitting
+the fields which aren't used)
+
+{                                 (json object)
+  "hash" : "hex",                 (string) the block hash (same as provided)
+  "height" : n,                   (numeric) The block height or index
+  "tx" : [                        (json array) The transaction ids
+    <transaction>,                (string) The transaction id
+    ...
+  ],
+  "previousblockhash" : "hex",    (string) The hash of the previous block
+}
+
+See https://developer.bitcoin.org/reference/rpc/getblock.html
+
+Each transaction <transaction> in the above has format (again, omitting
+the fields which aren't used)
+
+{                           (json object)
+  "txid" : "hex",           (string) The transaction id
+  "vout" : [                (json array)
+    {                       (json object)
+      "value" : n,          (numeric) The value in BTC
+      "n" : n,              (numeric) index
+      "scriptPubKey" : {    (json object)
+        "addresses" : [     (json array)
+          "str",            (string) bitcoin address
+          ...
+        ]
+      }
+    },
+    ...
+  ]
+}
+
+See https://developer.bitcoin.org/reference/rpc/decoderawtransaction.html
+
+The returned JSON is then converted into an object with format
+
+{"hash": "hex",                 (string) the block hash (same as provided)
+ "height":  n,                  (numeric) The block height or index
+ "txs": [{"id": "hex",          (string) The transaction id
+ 	  "vouts": [{"index": n,         (numeric) index
+	  	     "value": n,         (numeric) The value in BTC
+		     "address": "str"}]  (string) bitcoin address
+	  }],
+ "prevhash": "hex"}		(string) The hash of the previous block
+
+The value in BTC in the above can be represented as a rational number.
+
+
+sig.lisp
+========
+bitcoin-armor
+bitcoin-armored -> bitcoin-armor
+bitcoin-asign -> bc-sign, bitcoin-armor
+bitcoin-asigned -> bitcoin-asign
+sign -> bitcoin-asigned
+
+keys.lisp
+=========
+(defstruct qcust keyspace custid)
+(defstruct der-addr ind addr birthtime)
+add-cust
+try-add-cust -> add-cust
+derive-address -> bc-deriveaddress1
+fetch-address -> derive-address
+derive-child -> fetch-address
+valid-child -> derive-child
+next-child -> valid-child
+
+util.lisp
+=========
+(defstruct dcache
+  lst1 lst2
+  (results (make-hash-table :test #'equalp))
+  lifespan)
+dedup-calls
+
+scripts.lisp
+============
+(defstruct inv-ref intid extid)
+(defstruct chain-payment tag to-address vout-id amt)
+(defstruct inv-ann intid extid amt)
+try-add-cust3 -> try-add-cust
+create-invoice -> try-add-cust3
+dedup-create-invoice -> dedup-calls, create-invoice
+create-invoice2 -> dedup-create-invoice
+compute-chain-changes -> get-block-at-depth, fetch-payments1
+book-payments ********************
+book-chain-changes -> book-payments
+fetch-payments -> chain-diff-vout-do
+fetch-payments1 -> fetch-payments
+descriptor-validp -> bc-descinfo, derive-address
+register-keyspace -> descriptor-validp
+
+cli.lisp
+========
+cmd-create-invoice -> create-invoice2
+
+slack.lisp
+==========
+(defstruct slr token teamid type eventid eventtime ev-type ev-user ev-team ev-channel ev-eventts
+  ev-block-text)
+(defstruct sl-mout team channel user msg)
+(defstruct tchan team channel)
+marshal-keyspace
+do-sl-invoice -> create-invoice2, marshal-keyspace
+sl-invoice -> do-sl-invoice
+sl-largest-published -> marshal-keyspace
+do-sl-register -> marshal-keyspace
+sl-register -> do-sl-register
+sl-largest-published -> marshal-keyspace
+marshal-and-sign
+process-sl-mouts -> sl-group-by-channel, marshal-and-sign
+cmd-process-sl-mouts -> process-sl-mouts
+sl-construct-text
+sl-group-by-channel -> sl-construct-text
+
+ngx.lisp
+========
+
+journal.lisp
+============
+
+pay.lisp
+========
+(defstruct acc (bal 0) (txs '()))
+(defstruct tx id amt)
+
+compute-paid-charges -> announce-newly-paid
+generate-charge -> compute-paid-charges
+receive-payment -> compute-paid-charges
+generate-priority-charge -> compute-paid-charges
+announce-newly-paid
+
+===========================================================================
+
+curl --user myusername --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "getbestblockhash", "params": []}' -H 'content-type: text/plain;' http://127.0.0.1:8332/
+
+
+curl --user myusername --data-binary '{"jsonrpc": "1.0", "id": "curltest", "method": "getblock", "params": ["00000000c937983704a73af28acdec37b049d214adbda81d7e2a3dd146f6ed09"]}' -H 'content-type: text/plain;' http://127.0.0.1:8332/
+
+
+(decode-json-rpc-response decoder request-id response-json)
+
+(json-rpc server-url method params
+               result-decoder: (result-decoder identity)
+               param-encoder: (param-encoder identity)
+               timeout: (timeout rpc-timeout)
+               log: (log #f))

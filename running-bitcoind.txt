@@ -1,0 +1,28 @@
+How to get bitcoind running on the command line
+===============================================
+
+As root, run
+$ find / -name "bitcoind"
+
+Then go to the directory it's in, and run
+
+$ ./bitcoind
+
+That starts up the daemon, which you  can then query using bitcoin-cli.
+
+Next, find bitcoin-cli
+
+Then you can run e.g.
+
+$ bitcoin-cli getbestblockhash
+
+and then
+
+bitcoin-cli getblock <string returned by bitcoin-cli getbestblockhash>
+
+To stop bitcoind running, execute
+
+$ bitcoin-cli stop
+
+Connecting remotely will require an http server to be running on mallory.
+
