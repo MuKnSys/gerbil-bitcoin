@@ -26,12 +26,23 @@
 **** TODO adapt code from main
 ** Current tasks
 **** TODO Ask Hoch: What service for key generation, watch declaration? JSON REST API? Other? What schema?
+Hoch: is this a how do we communicate from other parts in? I guess REST returning JSON results. I’ve generally just used query strings to pass the data in- there isn’t a lot of communications/function calls. But migrating the internal RPCs into something formal would be good.
+I only have two direct API calls in MuKnWeb3CA right now, delete and “resync” - everything else is a GET that prepops a form that is the self POSTed by browser after confirming with user (Wallet creation)
+Notify is a web hook handler
+F: a. If our service is started on heroku, how does the other service know how to connect to it?
+F: b. will you push the list of addresses to watch in each request, or will our bitcoin watcher keep a persistent list of addresses to watch?
 **** TODO Ask Hoch: What Data Schema? Pgsql schema declaration? Or only Json schema for a service?
+Hoch: it like it to interact directly with the Pgsql database as much as possible. Minimal interdependencies
+F: do you already have a schema of sorts in any shape? Where?
 **** TODO Ask Hoch: How to run a docker image in conjunction with the other?
+Hoch: I’ll setup in Heroku another “app” called muknweb3ca-btc and you can put the Gerbil code in there. I’ll attach it to our Heroku Postgres addon
+F: Sounds good. How does my service access the pg database?
 **** TODO Ask Hoch: How to configure a docker image to use the right database, to be sshable into?
-For sshability, if the IP is hard to know and port 22 is hard to open,
+F: For sshability, if the IP is hard to know and port 22 is hard to open,
 we could do a reverse ssh proxy, with a development instance of the docker image having something like
 autossh -R 2022:localhost:22 mallory
+H: negative - Heroku postgres has its own standards. It’s standard postgres with their inter communication defined by their stuff
+I’ll add you to my Heroku team, then do their getting started tour in whichever language you’d prefer, it’ll help a lot
 **** TODO Manually launch gerbil-bitcoin in regtest mode
 https://github.com/BlockchainCommons/Learning-Bitcoin-from-the-Command-Line/blob/master/A3_0_Using_Bitcoin_Regtest.md
 bitcoind -regtest -daemon -fallbackfee=1.0 -maxtxfee=1.1
