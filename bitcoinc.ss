@@ -4,8 +4,7 @@
 ;; https://developer.bitcoin.org/reference/rpc/
 
 (import
-  :clan/net/json-rpc
-  ./http-ka)
+  :clan/net/json-rpc)
 
 ;; We support for two bitcoind:
 ;; - One bitcoind watches the blockchain;
