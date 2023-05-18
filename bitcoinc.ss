@@ -1,89 +1,54 @@
-(in-package "BTCPAY")
+(export #t)
 
-;; there is support for two bitcoind's. one for chain information, which we
-;; need trust less, and another for utility functions such as address
-;; derivation, which must be more trustworthy.
-;; the chain one's going down won't crash our program.
-;; the utility one doesn't need any blocks downloaded or stored. e.g.,
-;;     bitcoind -connect 127.0.0.1:62000
-;;   or something, where nothing's listening on port 62000, will prevent it
-;;   from connecting to real peers and downloading the chain.
-(def *bitcoind-chain-url* nil)
-(def *bitcoind-chain-userpass* nil)
-(def *bitcoind-chain-conn* (make-ka-conn))
-(def *bitcoind-util-url* nil)
-(def *bitcoind-util-userpass* nil)
-(def *bitcoind-util-conn* (make-ka-conn))
+;; See this reference documentation (that explicitly disclaims being a specification):
+;; https://developer.bitcoin.org/reference/rpc/
 
-(def (set-bitcoind-chain-url url)
-  (print `(set-bitcoind-chain-url ,url))
-  (close-ka-conn *bitcoind-chain-conn*)
-  (setf *bitcoind-chain-url* url
-        *bitcoind-chain-conn* (make-ka-conn)))
+(import
+  :clan/net/json-rpc
+  ./http-ka)
 
-(def (set-bitcoind-util-url url)
-  (close-ka-conn *bitcoind-util-conn*)
-  (setf *bitcoind-util-url* url
-        *bitcoind-util-conn* (make-ka-conn)))
+;; We support for two bitcoind:
+;; - One bitcoind watches the blockchain;
+;;   we need to trust it with data availability, but not with keys.
+;;   If it crashes, that should not interrupt the key handling functionality,
+;;   and watch will resume forthwith after it's restarted.
+;; - One bitcoind handles key derivation;
+;;   we need to trust it to give us good answers about keys,
+;;   but it need not be connected to the network at all.
+;;   It could be run trying to connect to a closed port 6666 or something like this:
+;;     bitcoind -connect 127.0.0.1:6666
+;; The two can also be the same, that must then be connected to the network, yet
+;; secure enough to not fake public key derivation or leak private key information.
 
-#||
-(define-condition proc-error error)
-    ((http-code :initarg :http-code
-                :initform nil
-                :reader proc-error-http-code)
-     (http-reason :initarg :http-reason
-                  :initform nil
-                  :reader proc-error-http-reason)
-     (rpc-error :initarg :rpc-error
-                :initform nil
-                :reader proc-error-rpc-error))
-  (:report (lambda (condition stream)
-             (format stream
-                     "JSON-RPC failed (HTTP ~A ~A) (RPC ~A)"
-                     (proc-error-http-code condition)
-                     (proc-error-http-reason condition)
-                     (proc-error-rpc-error condition)))))
-||#
+(defstruct BitcoindConnection
+  ;; TODO: in the future, support keepalive and retrying
+  (url ;; URL ;;
+   auth) ;; : Auth ;; auth argument for std/net/request, e.g. #f or [basic: "myusername" "mypassword"]
+  transparent: #t)
 
-(def (bitcoind-rpc conn url userpass meth . params)
-  "Raises an error if TCP or HTTP error[*] or malformed JSON response.
-   Otherwise raises a PROC-ERROR if JSON-RPC response has an error member.
-   Otherwise returns result member's json decoded value.
-   Separating error types lets callers use bitcoind for validation.
-   [*]: except 500, which is also treated as a PROC-ERROR. bad protocol."
-  (let ((resp (http-ka-request
-                conn url :basic-authorization userpass
-                :method :post :force-binary t
-                :content-type "application/json"
-                :content
-                  (encode-json-alist-to-string
-                    (list '("id" . "") '("jsonrpc" . "1.0")
-                          (cons "method" meth) (cons "params" params))))))
-    (cond ((null (cdr resp)) (error "bitcoind connection failure"))
-          ((equal (cadr resp) 500) ;bitcoind should complain with 200. doesn't.
-           (error 'proc-error :http-code (cadr resp) :http-reason (nth 6 resp)))
-          ((not (equal (cadr resp) 200))
-           (error "http error ~A ~A" (cadr resp) (nth 6 resp)))
-          (else
-           (let ((resp-obj
-                   (decode-json-from-string
-                     (map 'string #'code-char (car resp))))) ; assumption: ASCII
-             (let ((rpc-error (assoc :error resp-obj))
-                   (rpc-result (assoc :result resp-obj)))
-               (cond ((cdr rpc-error) ;not used. bitcoind stupidly sends 500.
-                      (error 'proc-error :rpc-error (cdr rpc-error)))
-                     ((null rpc-result) (error "malformed rpc response"))
-                     (else (cdr rpc-result)))))))))
+;; : (OrFalse BitcoindConnection)
+(def bitcoind-chain #f)
 
-(def (bitcoind-chain-rpc meth . params)
-  (apply #'bitcoind-rpc *bitcoind-chain-conn* *bitcoind-chain-url*
-                        *bitcoind-chain-userpass* meth params))
+;; : (OrFalse BitcoindConnection)
+(def bitcoind-keys #f)
 
-(def (bitcoind-util-rpc meth . params)
-  (apply #'bitcoind-rpc *bitcoind-util-conn* *bitcoind-util-url*
-                        *bitcoind-util-userpass* meth params))
 
-;;;; See https://developer.bitcoin.org/reference/rpc/index.html
+;; TODO: use clan/net/simple-http-client ? clan/net/json-rpc ?
+;; Raises an error if TCP or HTTP error[*] or malformed JSON response.
+;; Otherwise raises a PROC-ERROR if JSON-RPC response has an error member.
+;; Otherwise returns result member's json decoded value.
+;; Separating error types lets callers use bitcoind for validation.
+;; [*]: except 500, which is also treated as a PROC-ERROR. bad protocol.
+(def (bitcoind-rpc connection method . params)
+  (with ((BitcoindConnection url auth) connection)
+    (json-rpc url method params auth: auth)))
+
+(def (bitcoind-chain-rpc method . params)
+  (apply bitcoind-rpc bitcoind-chain method params))
+
+(def (bitcoind-keys-rpc method . params)
+  (apply bitcoind-rpc bitcoind-keys method params))
+
 
 ;;;; Blockchain RPCs
 
@@ -106,8 +71,7 @@
 ;;; If verbosity is 2, returns an Object with information about block ‘hash’
 ;;; and information about each transaction.
 (def (bc-block-verbose-2 hash)
-  (let ((*real-handler* #'values)) ; keeps cl-json reals (not ints) as strings
-    (bitcoind-chain-rpc "getblock" hash 2)))
+  (bitcoind-chain-rpc "getblock" hash 2))
 
 ;;;; Util RPCs
 
@@ -124,7 +88,7 @@
 ;;; }
 ;;; Analyses a descriptor.
 (def (bc-descinfo prevalidated-desc)
-  (bitcoind-util-rpc "getdescriptorinfo" prevalidated-desc))
+  (bitcoind-keys-rpc "getdescriptorinfo" prevalidated-desc))
 
 ;;; deriveaddresses "descriptor" ( range )
 ;;; A descriptor wallet is one which stores output descriptors
@@ -143,7 +107,7 @@
 ;;; For more information on output descriptors, see the documentation
 ;;; in the doc/descriptors.md file.
 (def (bc-deriveaddress1 descriptor index)
-  (bitcoind-util-rpc "deriveaddresses" descriptor (list index index)))
+  (bitcoind-keys-rpc "deriveaddresses" descriptor (list index index)))
 
 ;;;; Wallet RPCs
 
@@ -153,4 +117,4 @@
 ;;; Requires wallet passphrase to be set with walletpassphrase call
 ;;; if wallet is encrypted.
 (def (bc-sign address message)
-  (bitcoind-util-rpc "signmessage" address message))
+  (bitcoind-keys-rpc "signmessage" address message))

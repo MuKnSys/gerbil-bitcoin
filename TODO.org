@@ -1,0 +1,66 @@
+#+STARTUP: showall
+* Progress on hacking gerbil-bitcoin
+** Done tasks
+**** Checkout https://github.com/MuKnSysEnterprise/btcpay
+**** Check it was exactly at the same state as https://gitlab.com/mukn/btcpay
+**** (done earlier by Donald) Created a repository https://github.com/MuKnSys/gerbil-bitcoin
+*** TODO Import useful code from VM's btcpay
+**** Open btcpay.asd in Emacs, start importing code
+**** Skipped wispym-util: redundant with gerbil utilities
+**** Skipped exchange-util: use clan/decimal from gerbil-utils if needed
+**** DONE first pass over http-ka. But we probably won't be using it for now and will remove it.
+**** Skipped util: redundant with gerbil utilities
+**** Skipped ngx: hopefully won't need nginx wrapper
+**** Skipped changelog: hopefully use regular logging and/or database and/or persistence
+**** Skipped pay: hopefully won't need VM's attempt at accounting
+**** DONE first pass over bitcoinc. Use json-rpc rather than http-ka.
+**** TODO adapt from from keys
+**** TODO Skipped currency: use clan/decimal
+**** TODO adapt code from chain
+**** TODO adapt code from scripts
+**** TODO adapt code from cmd
+**** TODO adapt code from cli
+**** TODO adapt code from sig
+**** Skipped slack: not needed for now
+**** TODO adapt code from journal
+**** TODO adapt code from main
+** Current tasks
+**** TODO Ask Hoch: What service for key generation, watch declaration? JSON REST API? Other? What schema?
+**** TODO Ask Hoch: What Data Schema? Pgsql schema declaration? Or only Json schema for a service?
+**** TODO Ask Hoch: How to run a docker image in conjunction with the other?
+**** TODO Ask Hoch: How to configure a docker image to use the right database, to be sshable into?
+For sshability, if the IP is hard to know and port 22 is hard to open,
+we could do a reverse ssh proxy, with a development instance of the docker image having something like
+autossh -R 2022:localhost:22 mallory
+**** TODO Manually launch gerbil-bitcoin in regtest mode
+https://github.com/BlockchainCommons/Learning-Bitcoin-from-the-Command-Line/blob/master/A3_0_Using_Bitcoin_Regtest.md
+bitcoind -regtest -daemon -fallbackfee=1.0 -maxtxfee=1.1
+**** TODO Manually generate a key
+**** TODO Manually generate a block and get coins
+**** TODO Manually send a transaction
+**** TODO Manually generate a new block
+**** TODO Manually verify that the transaction was included
+**** TODO Have gerbil-bitcoin launch bitcoind in regtest mode
+**** TODO Have gerbil-bitcoin generate a private key
+**** TODO Have gerbil-bitcoin generate a block and get coins
+**** TODO Have gerbil-bitcoin send a transaction
+**** TODO Have gerbil-bitcoin generate a new block
+**** TODO Have gerbil-bitcoin verify that the transaction was included
+**** TODO Have gerbil-bitcoin generate a private HD master key
+**** TODO Have gerbil-bitcoin generate a public HD master key
+**** TODO Have gerbil-bitcoin generate a public HD path key
+**** TODO Have gerbil-bitcoin generate a private HD path key
+**** TODO Have gerbil-bitcoin send a transaction to a HD key
+**** TODO Have gerbil-bitcoin send a transaction from a HD key
+**** TODO Have gerbil-bitcoin watch inbound transactions
+**** TODO Have gerbil-bitcoin watch outbound transactions
+**** TODO Implement a Rest or otherwise API for gerbil-bitcoin
+**** TODO LATER Have gerbil-bitcoin watch reorganizations
+**** TODO LATER Get keepalive working in gerbil std
+**** TODO LATER Get keys from Ledger -- ship one to our customers -- get discount from Ledger
+**** TODO LATER Get keys from Trezor -- get discount from Trezor
+** Translate
+**** VM's http-ka-request returns :error e or multiple values body, like in Drakma.
+We return a std/net/request#request.
+**** VM's bitcoind-chain-FOO is our bitcoind-chain
+**** VM's bitcoind-util-FOO is our bitcoind-keys
