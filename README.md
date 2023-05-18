@@ -33,6 +33,12 @@ To stop bitcoind running, execute:
 bitcoin-cli -regtest stop
 ```
 
+On a machine where you only or mostly use the regtest server,
+you can add a `regtest=1` line in your `~/.bitcoin/bitcoin.conf` file
+and not have to specify `-regtest` at the command-line anymore
+(instead having to use `-chain=main` when you want to talk to a "real" bitcoin).
+
+
 ## Shared test environment
 
 We ought to setup something on our development/test server mallory.
