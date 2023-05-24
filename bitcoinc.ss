@@ -1,7 +1,8 @@
-(export #t)
-
 ;; See this reference documentation (that explicitly disclaims being a specification):
 ;; https://developer.bitcoin.org/reference/rpc/
+;; TODO: build an interface for each and every function in that reference document.
+
+(export #t)
 
 (import
   :clan/net/json-rpc)
@@ -91,7 +92,7 @@
 
 ;;; deriveaddresses "descriptor" ( range )
 ;;; A descriptor wallet is one which stores output descriptors
-;;; and uses them to create addresses and sign transactions. 
+;;; and uses them to create addresses and sign transactions.
 ;;; Derives one or more addresses corresponding to an output descriptor.
 ;;; Examples of output descriptors are:
 ;;; pkh(<pubkey>) P2PKH outputs for the given pubkey wpkh(<pubkey>)

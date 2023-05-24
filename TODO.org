@@ -5,14 +5,14 @@
 **** Check it was exactly at the same state as https://gitlab.com/mukn/btcpay
 **** (done earlier by Donald) Created a repository https://github.com/MuKnSys/gerbil-bitcoin
 *** TODO Import useful code from VM's btcpay
-**** Open btcpay.asd in Emacs, start importing code
-**** Skipped wispym-util: redundant with gerbil utilities
-**** Skipped exchange-util: use clan/decimal from gerbil-utils if needed
-**** DONE first pass over http-ka. But we probably won't be using it for now and will remove it.
-**** Skipped util: redundant with gerbil utilities
-**** Skipped ngx: hopefully won't need nginx wrapper
-**** Skipped changelog: hopefully use regular logging and/or database and/or persistence
-**** Skipped pay: hopefully won't need VM's attempt at accounting
+**** DONE Open btcpay.asd in Emacs, start importing code
+**** DONE Skipped wispym-util: redundant with gerbil utilities
+**** DONE Skipped exchange-util: use clan/decimal from gerbil-utils if needed
+**** DONE First pass over http-ka. But we probably won't be using it for now and will remove it.
+**** DONE Skipped util: redundant with gerbil utilities
+**** DONE Skipped ngx: hopefully won't need nginx wrapper
+**** DONE Skipped changelog: hopefully use regular logging and/or database and/or persistence
+**** DONE Skipped pay: hopefully won't need VM's attempt at accounting
 **** DONE first pass over bitcoinc. Use json-rpc rather than http-ka.
 **** TODO adapt from from keys
 **** TODO Skipped currency: use clan/decimal
@@ -75,3 +75,4 @@ bitcoind -regtest -daemon -fallbackfee=1.0 -maxtxfee=1.1
 We return a std/net/request#request.
 **** VM's bitcoind-chain-FOO is our bitcoind-chain
 **** VM's bitcoind-util-FOO is our bitcoind-keys
+**** Ask VM why Q in qcust
