@@ -196,7 +196,7 @@
    nonce: [JsInt] ;; The nonce
    bits: [Bytes] ;; The bits
    difficulty: [Float] ;; The difficulty
-   chainwork: [Bytes] ;; Expected number of hashes required to produce the chain up to this block (in hex) ;; TODO: have a type for hex-encoded bigints
+   chainwork: [Bytes] ;; Expected number of hashes required to produce the chain up to this block (in hex) ;; TODO: have a type for hex-encoded bigints?
    nTx: [JsInt] ;; The number of transactions in the block
    previousblockhash: [(Maybe Hash)] ;; The hash of the previous block
    nextblockhash: [(Maybe Hash)])) ;; The hash of the next block

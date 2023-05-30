@@ -3,7 +3,8 @@
   create-invoice2 process-announcements register-keyspace)
 
 (import
-  :std/misc/hash :std/misc/number
+  :gerbil/gambit/ports
+  :std/assert :std/misc/hash :std/misc/list :std/misc/list-builder :std/misc/number
   :std/srfi/13 :std/sugar
   :clan/base :clan/basic-parsers :clan/decimal
   ./keys)
@@ -13,30 +14,34 @@
 ;; keyspace to invoice counter
 (def invoice-counters (hash))
 
-(def (next-inv-ctr keyspace) (increment! (hash-ref invoice-counters keyspace -1)))
+(def (next-invoice-counter keyspace)
+  (increment! (hash-ref invoice-counters keyspace -1)))
 
-(defstruct inv-ref
+(defstruct invoice-reference
   (intid
    extid))
 
-#|
-(def (create-invoice time keyspace custid invid amt-str)
-  (let ((amt (decimal<-string amt-str sign-allowed?: #f)))
-    (when (and amt (nth-value 1 (hash-get *descriptors* keyspace)))
-      (let ((qc (make-qcust :keyspace keyspace :custid custid)))
-        (let ((da (or (address<-customer qc) (try-add-cust3 qc time))))
-          (when da
-            (generate-charge qc invid amt)
-            (cons da amt)))))))
+(def (create-invoice time keyspace customer-id invoice-id amount-str)
+  (def amount (decimal<-string amount-str sign-allowed?: #f))
+  (when (and amount (hash-key? descriptor<-keyspace keyspace))
+    (let* ((qc (make-qcust keyspace customer-id))
+           (da (or (address<-customer qc) (try-add-cust3 qc time))))
+      (when da
+        '(generate-charge qc invoice-id amount) ;; TODO report event
+        (cons da amount)))))
 
-(def *addr-custs2* (hash))
+(def addr-custs2 (hash))
 
 (def (try-add-cust3 qcust time)
-  (let ((da (try-add-cust qcust time)))
-    (when da
-      ;we allow multiple keyspaces/descriptors that derive same keys. tell all.
-      (push qcust (gethash (der-addr-addr da) *addr-custs2*))
-      da)))
+  (def da (try-add-customer qcust time))
+  (when da
+    ;;we allow multiple keyspaces/descriptors that derive same keys. tell all.
+    (let (daa (derived-address-address da))
+      (push! qcust (hash-get addr-custs2 daa)))
+    da))
+
+#|
+
 #|
 Definition: Two keyspaces overlap if there is some address that both can derive.
 A set of non-overlapping keyspaces plus the chain form a balanced accounting
@@ -46,47 +51,45 @@ A set of keyspaces where some overlap, plus the chain, are not a balanced
 system.
 |#
 
+(def dedup-invoice-delay-in-seconds (* 60 60 24 3))
+(def dedup-create-invoice
+  (dedup-calls dedup-invoice
+               (lambda a (cons (apply create-invoice a) a))
+               dedup-invoice-delay-in-seconds))
 
-(defparameter *dedup-inv-sec* (* 60 60 24 3))
-(let ((f (dedup-calls 'dedup-inv
-                      #'(lambda (&rest a) (cons (apply #'create-invoice a) a))
-                      *dedup-inv-sec*)))
-  (def (dedup-create-invoice &rest args) (apply f args)))
-
-(def (create-invoice2 tag time keyspace cust inv amt-str)
-  (let ((callkey (cons keyspace inv))
-        (matchargs (cons cust amt-str)))
-    (multiple-value-bind (prv hit2) (dedup-lookup 'dedup-inv callkey)
-      (labels ((invoice-response1 (create-result tinv)
-                 (if create-result
-                   (list* 'invoice-address
-                          (princ-to-string (inv-ref-intid (inv-body tinv)))
-                          (append (printable-der-addr (car create-result))
-                                  (list (print-btc (cdr create-result)))))
-                   (list 'no-answer))))
-        (if (not hit2)
-          (let ((inv (make-tagged-invoice
-                       tag
-                       (make-inv-ref :intid (next-inv-ctr keyspace)
-                                     :extid inv))))
-            (invoice-response1
-              (car (dedup-create-invoice time callkey
-                                         time keyspace cust inv amt-str))
-              inv))
-          (destructuring-bind (pres ptm pks pcust pinv pamtstr) (car prv)
-            (if (and (equal cust pcust) (equal amt-str pamtstr))
-              (invoice-response1 pres pinv)
-              (list 'mismatching-duplicate-request))))))))
+(def (create-invoice2 tag time keyspace customer invoice amount-str)
+  (def callkey (cons keyspace inv))
+  (def matchargs (cons cust amount-str))
+  (define-values (prv hit2) (dedup-lookup dedup-invoice callkey))
+  (def (invoice-response1 create-result tinv)
+    (if create-result
+      ['invoice-address
+       (object->string (invoice-reference-intid (invoice-body tinv)))
+       (printable-der-addr (car create-result)) ...
+       (print-btc (cdr create-result))]
+      '(no-answer)))
+  (if (not hit2)
+    (let ((inv (make-tagged-invoice
+                tag
+                (make-invoice-reference (next-inv-ctr keyspace) inv))))
+      (invoice-response1
+       (car (dedup-create-invoice time callkey
+                                  time keyspace cust inv amt-str))
+       inv))
+    (with ((list pres ptm pks pcust pinv pamtstr) (car prv))
+      (if (and (equal? cust pcust) (equal? amt-str pamtstr))
+        (invoice-response1 pres pinv)
+        '(mismatching-duplicate-request)))))
 
 (def (printable-derived-address da)
-  [(object->string (derived-address-ind da))
-   (derived-address-addr da)
-   (object->string (universal-to-unix-time (derived-address-birthtime da)))])
-
+  [(object->string (derived-address-index da))
+   (derived-address-address da)
+   (object->string (derived-address-birthtime da))])
 
 ;;;; monitor chain ;;;;
 
-(defparameter *confirmations* 1 "must be positive. tip of chain has one conf.")
+;; must be positive. tip of chain has one conf.
+(def *confirmations* 1)
 ; we model confirmations as a lag that we operate at.
 ; all blocks at height zero are considered to have been born with infinite
 ;   confirmations. i.e. if this parameter is larger than chain length, you will
@@ -94,7 +97,7 @@ system.
 ; one way to notify at e.g. two different confirmation levels is to
 ;   have two sets of (books (pay.lisp) + lastblkhash)
 
-(defvar *lastblkhash* nil)
+(def *lastblkhash* nil)
 ; when replaying events, what if bitcoind no longer has some blocks?
 ; e.g. those from abandoned forks or ancient blocks when in pruning mode.
 ; you should ignore their absence and carry on. in fact skipping all
@@ -108,65 +111,63 @@ system.
 ;          this also makes reasoning about overall application easier, because
 ;          now completely deterministic.]
 
+;; does not change application state, but fetches blockchain data for logging
+;; into the changelog
 (def (compute-chain-changes bestblockhash)
-  "does not change application state, but fetches blockchain data for logging
-   into the changelog"
   (let ((h (blk2-hash (get-block-at-depth bestblockhash (1- *confirmations*)))))
     (cons h (fetch-payments1 h))))
 
+;; changes application state without needing access to the blockchain
 (def (book-chain-changes changes)
-  "changes application state without needing access to the blockchain"
   (book-payments (cdr changes))
   (setf *lastblkhash* (car changes)))
 
+;; Returns a list of chain-payments to be applied. It's correct for this
+;; procedure to be called at initialisation time when no addresses are yet
+;; being observed.
 (def (fetch-payments1 hash)
-  "Returns a list of chain-payments to be applied. It's correct for this
-   procedure to be called at initialisation time when no addresses are yet
-   being observed."
-  (cond (*lastblkhash* (fetch-payments *lastblkhash* hash *addr-custs2*))
-        (t (assert (zero? (hash-table-count *addr-custs2*))))))
+  (if *lastblkhash*
+    (fetch-payments *lastblkhash* hash addr-custs2)
+    (assert! (hash-empty? addr-custs2))))
 
 (defstruct chain-payment
-  tag ; - to rollback, + to roll forward
-  to-address
-  vout-id ; (blkhash txid vout-index)
-  amt)
+  (tag ; - to rollback, + to roll forward
+   to-address
+   vout-id ; (blkhash txid vout-index)
+   amt))
 
+;; Scans chain between OLDBLKHASH and NEWBLKHASH for information related (only)
+;; to ADDRESSES. Returns a list of chain-payments. May raise RPC error.
 (def (fetch-payments oldblkhash newblkhash addresses)
-  "Scans chain between OLDBLKHASH and NEWBLKHASH for information related (only)
-   to ADDRESSES. Returns a list of chain-payments. May raise RPC error."
-  (let ((mods '()))
-    (labels ((cb (tag)
-               #'(lambda (blkhash txid vout)
-                   (when (nth-value 1 (gethash (vout-address vout) addresses))
-                     (push (make-chain-payment
-                             :tag tag
-                             :to-address (vout-address vout)
-                             :vout-id (list blkhash txid (vout-index vout))
-                             :amt (vout-value vout))
-                           mods)))))
-      (chain-diff-vout-do oldblkhash newblkhash (cb '-) (cb '+))
-      (nreverse mods))))
+  (with-list-builder (c)
+    (def (cb tag)
+      (lambda (blkhash txid vout)
+        (when (hash-key? addresses (vout-address vout))
+          (c (make-chain-payment
+              tag: tag
+              to-address: (vout-address vout)
+              vout-id: (list blkhash txid (vout-index vout))
+              amt: (vout-value vout))))))
+    (chain-diff-vout-do oldblkhash newblkhash (cb '-) (cb '+))))
 
-(defvar *payment-id-ctr* -1
-  "You can go up and down between two given blocks any number of times, which
-   means that the vout-id alone is not unique in our books. So we combine it
-   with this counter's value.")
+;; You can go up and down between two given blocks any number of times, which
+;; means that the vout-id alone is not unique in our books. So we combine it
+;; with this counter's value.
+(def *payment-id-ctr* -1)
 
 (def (book-payments payments)
-  (mapc #'(lambda (p)
-            (let ((fn (case (chain-payment-tag p)
-                        (- 'generate-priority-charge)
-                        (+ 'receive-payment)))
-                  (vout-id (chain-payment-vout-id p))
-                  (amt (chain-payment-amt p)))
-              (mapc #'(lambda (cust)
-                        (funcall fn cust
-                                 (list* 'chain (incf *payment-id-ctr*) vout-id)
-                                 amt))
-                    (gethash (chain-payment-to-address p) *addr-custs2*))))
-        payments))
-
+  (for-each (lambda (p)
+              (let ((fn (case (chain-payment-tag p)
+                          ((-) 'generate-priority-charge)
+                          ((+) 'receive-payment)))
+                    (vout-id (chain-payment-vout-id p))
+                    (amt (chain-payment-amt p)))
+                (for-each (lambda (cust)
+                            (fn cust
+                                ['chain (pre-increment! *payment-id-ctr*) vout-id ...]
+                                amt))
+                          (hash-get addr-custs2 (chain-payment-to-address p)))))
+            payments))
 
 ;;;; parting announced invoices by tag ;;;;
 
@@ -186,10 +187,10 @@ system.
 ; we don't yet need messages ordered, but might if we add features, so we make
 ; an effort to not weaken our ordering guarantees lightly.
 
-(def (make-tagged-invoice tag inv) (cons tag inv))
-(def (inv-tag inv) (car inv))
-(def (inv-body inv) (cdr inv))
-(def (inv-tag-matches inv tag) (eql (car inv) tag))
+(def (make-tagged-invoice tag invoice) (cons tag invoice))
+(def (invoice-tag inv) (car inv))
+(def (invoice-body inv) (cdr inv))
+(def (invoice-tag-matches invoice tag) (equal? (car invoice) tag))
 
 ;; table from tag to its announcements (from which tags are removed)
 (def *parted-announcements* (hash))
@@ -217,11 +218,11 @@ system.
           (for ((values k v) row-invs)
             (hash-ensure-modify!
              partitioned k list (cons qc (reverse v)))))
-    (dolist (p partitioned)
-      (let ((entry (or (assoc (car p) *parted-announcements*)
-                       (car (push (list (car p)) *parted-announcements*)))))
-        (setf (cdr entry) (nreconc (cdr p) (cdr entry))))))
-  (setf *announcements* '()))
+    (for (p partitioned)
+      (def entry (or (assoc (car p) *parted-announcements*)
+                     (car (push (list (car p)) *parted-announcements*))))
+      (set! (cdr entry) (append-reverse (cdr p) (cdr entry))))))
+  (set! *announcements* '()))
 
 (defstruct inv-ann
   intid extid amt)
@@ -266,34 +267,19 @@ Update: augmentation done.
 
 (def (register-keyspace descriptor)
   "returns the new registration's keyspace ID if successful"
-  (when (descriptor-validp descriptor)
+  (when (descriptor-valid? descriptor)
     (let ((keyspace-id (incf *keyspace-counter*)))
       (setf (gethash keyspace-id *descriptors*) descriptor)
       keyspace-id)))
 
-(def (descriptor-validp descriptor)
-  (and (stringp descriptor)
-       (every #'(lambda (c)
-                  (or (ascii-alphanumeric? c)
-                      (string-index c
-                      (char= c #\() (char= c #\)) (char= c #\[) (char= c #\])
-                      (char= c #\') (char= c #\/) (char= c #\*) (char= c #\#)))
+(def (descriptor-valid? descriptor)
+  (and (string? descriptor)
+       (every (lambda (c) (or (ascii-alphanumeric? c) (string-index c "()[]'/*#")))
               descriptor)
-       (equal (search "wpkh" descriptor) 0)
-       (handler-case (let ((info (bc-descinfo descriptor)))
-                       (and (equal (cdr (assoc :descriptor info)) descriptor)
-                            (eq (cdr (assoc :isrange info)) t)
-                            (derive-address descriptor 0)))
-         (proc-error () nil))))
-
-; not an array because Common Lisp doesn't say that these char-codes will be
-; clustered together.
-(let ((h
-       (reduce #'(lambda (ht c) (setf (gethash c ht) t) ht)
-               "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-               :initial-value (make-hash-table :test #'eql))))
-  (def (english-alphanumeric-p c)
-    "ALPHANUMERICP is not necessarily adequate because e.g. on clisp
-     (alphanumericp #\KHMER_DIGIT_ZERO) => T"
-    (gethash c h)))
+       (string-prefix? "wpkh" descriptor)
+       (ignore-errors
+        (let (info (bc-descinfo descriptor))
+          (and (equal? (.@ info descriptor) descriptor)
+               (equal? (.@ info isrange) #t)
+               (derive-address descriptor 0))))))
 |#

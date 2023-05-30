@@ -1,3 +1,12 @@
+;; Using bitcoind to manage HD wallet keys as per BIP-32 (also see BIP 43, 44, 49, 84 for conventions.)
+;; https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki
+;; https://github.com/bitcoin/bips/blob/master/bip-0043.mediawiki
+;; https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki
+;; https://github.com/satoshilabs/slips/blob/master/slip-0044.md
+;; https://github.com/bitcoin/bips/blob/master/bip-0049.mediawiki
+;; https://github.com/bitcoin/bips/blob/master/bip-0084.mediawiki
+;; Alternative URLs https://en.bitcoin.it/wiki/BIP_0032 etc.
+
 (export #t)
 
 (import
@@ -8,9 +17,6 @@
 
 ;;(define-type Keyspace String) ;; identifies the keyspace, e.g. one client company's CRM service.
 
-;; BIP-32 path. (also glance at BIPs 43, 44, 49, 84 for conventions.)
-;; https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki
-;; https://en.bitcoin.it/wiki/BIP_0032
 ;; m/seller-account'/change(0|1)/invoicee-index
 ;; for now we'll combine all sellers into a single account
 ;;(define-type BIP32-Path String) ;; type of BIP32 paths, e.g. "m/0'/0 xpub"
@@ -45,7 +51,7 @@
 (defstruct derived-address
   (index ;; : UInt32 ;; index
    address ;; : BitcoinAddress ;; actual address
-   birthtime) ;; : (OrFalse UnixTimestamp) ;; creation
+   birthtime) ;; : (OrFalse UnixTimestamp) ;; creation ;; TODO: move that to another data structure
   transparent: #t)
 
 ;; : (Table BitcoinAddress Customer)

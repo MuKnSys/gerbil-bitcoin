@@ -14,9 +14,9 @@
 **** DONE Skipped changelog: hopefully use regular logging and/or database and/or persistence
 **** DONE Skipped pay: hopefully won't need VM's attempt at accounting
 **** DONE first pass over bitcoinc. Renamed to json-rpc, use clan/net/json-rpc. No keepalive for now.
-**** TODO adapt from from keys
-**** TODO Skipped currency: use clan/decimal
-**** TODO adapt code from chain
+**** DONE adapt from from keys
+**** DONE Skipped currency: use clan/decimal#decimal<-string
+**** DONE adapt code from chain
 **** TODO adapt code from scripts
 **** TODO adapt code from cmd
 **** TODO adapt code from cli
