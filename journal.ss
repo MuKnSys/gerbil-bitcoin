@@ -1,7 +1,7 @@
 (export)
 
 (import
-  )
+  ./cli)
 
 #|
 ;;;; exports: initialize

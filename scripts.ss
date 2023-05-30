@@ -5,7 +5,8 @@
 (import
   :std/misc/hash :std/misc/number
   :std/srfi/13 :std/sugar
-  :clan/basic-parsers)
+  :clan/base :clan/basic-parsers :clan/decimal
+  ./keys)
 
 ;;;; create invoice ;;;;
 
@@ -20,15 +21,15 @@
 
 #|
 (def (create-invoice time keyspace custid invid amt-str)
-  (let ((amt (parse-non-neg-btc amt-str)))
-    (when (and amt (nth-value 1 (gethash keyspace *descriptors*)))
+  (let ((amt (decimal<-string amt-str sign-allowed?: #f)))
+    (when (and amt (nth-value 1 (hash-get *descriptors* keyspace)))
       (let ((qc (make-qcust :keyspace keyspace :custid custid)))
         (let ((da (or (address<-customer qc) (try-add-cust3 qc time))))
           (when da
             (generate-charge qc invid amt)
             (cons da amt)))))))
 
-(defvar *addr-custs2* (make-hash-table :test #'equal))
+(def *addr-custs2* (hash))
 
 (def (try-add-cust3 qcust time)
   (let ((da (try-add-cust qcust time)))
@@ -123,7 +124,7 @@ system.
    procedure to be called at initialisation time when no addresses are yet
    being observed."
   (cond (*lastblkhash* (fetch-payments *lastblkhash* hash *addr-custs2*))
-        (t (assert (zerop (hash-table-count *addr-custs2*))))))
+        (t (assert (zero? (hash-table-count *addr-custs2*))))))
 
 (defstruct chain-payment
   tag ; - to rollback, + to roll forward
@@ -190,8 +191,8 @@ system.
 (def (inv-body inv) (cdr inv))
 (def (inv-tag-matches inv tag) (eql (car inv) tag))
 
-(defvar *parted-announcements* '()
-  "alist from tag to its announcements (from which tags are removed)")
+;; table from tag to its announcements (from which tags are removed)
+(def *parted-announcements* (hash))
 
 (def (part-announcements )
   "*ANNOUNCEMENTS* has all invoices regardless of tag. This procedure parts
@@ -200,22 +201,22 @@ system.
    the ANNOUNCEMENTS table itself. The only difference is that invoices in
    *PARTED-ANNOUNCEMENTS* have had their tags removed. Also, they have INV-ANN
    structs instead of conses."
-  (let ((partitioned '()))
-    (dolist (ann *announcements*)
-      (destructuring-bind (qc . tagged-invs) ann
-        (let ((row-invs '()))
-          (dolist (ti1 tagged-invs)
+  (def partitioned (hash))
+  (for (ann *announcements*)
+      (with ([qc . tagged-invs] ann)
+        (let ((row-invs (hash)))
+          (for (ti1 tagged-invs)
             (destructuring-bind (ti . amt) ti1
               (let ((ref (inv-body ti)))
-                (push (make-inv-ann :intid (inv-ref-intid ref)
+                 (hash-ensure-modify!
+                  row-invs (inv-tag ti) list
+                  (cut cons (make-inv-ann :intid (inv-ref-intid ref)
                                     :extid (inv-ref-extid ref)
                                     :amt amt)
-                      (cdr (or (assoc (inv-tag ti) row-invs)
-                               (car (push (list (inv-tag ti)) row-invs))))))))
-          (dolist (p row-invs)
-            (push (cons qc (nreverse (cdr p)))
-                  (cdr (or (assoc (car p) partitioned)
-                           (car (push (list (car p)) partitioned)))))))))
+                            <>)))))
+          (for ((values k v) row-invs)
+            (hash-ensure-modify!
+             partitioned k list (cons qc (reverse v)))))
     (dolist (p partitioned)
       (let ((entry (or (assoc (car p) *parted-announcements*)
                        (car (push (list (car p)) *parted-announcements*)))))

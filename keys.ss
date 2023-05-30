@@ -3,8 +3,8 @@
 (import
   :std/assert :std/sugar
   :std/srfi/13
-  :clan/assert
-  ./bitcoinc)
+  :clan/assert :clan/number
+  ./json-rpc)
 
 ;;(define-type Keyspace String) ;; identifies the keyspace, e.g. one client company's CRM service.
 
@@ -119,12 +119,10 @@
   (and (valid-address? a) a))
 
 (def (derive-address descriptor i)
-  (assert! (string-prefix? "wpkh" descriptor))
   ;;TODO this call must be to a bitcoind deployment trustworthy enough
   ;;     for address derivation, not to some public block notifier.
-  (let ((addrs (bc-deriveaddress1 descriptor i)))
-    (assert! (and addrs (car addrs) (< 0 (length (car addrs)))))
-    (car addrs)))
+  (assert! (string-prefix? "wpkh" descriptor))
+  (deriveaddress descriptor i))
 
 ; state changes are isolated here for prevayler
 (def (add-customer qcust derived-address time)

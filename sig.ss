@@ -1,3 +1,5 @@
+(import
+  ./json-rpc)
 
 #|
 (def (bitcoin-armored plaintext address signature)

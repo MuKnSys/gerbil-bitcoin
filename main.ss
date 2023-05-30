@@ -1,3 +1,6 @@
+(import
+  ./json-rpc ./cmd ./cli)
+
 #| how to run
 ; set up tunnels for slack http proxying
 ; run bitcoind
@@ -13,21 +16,19 @@
 ; if you reload the program, then also reload conf
 |#
 
-(in-package "BTCPAY")
-
 ;;;; exports: main-loop
 ;;;; expects: journal's initialize to have been called
 
-(defparameter *chain-poll-sec* 10)
-(defparameter *slack-process-sec* 3)
-(defparameter *slack-outgoing-sec* 3)
-(defparameter *changelog-lax-sec* (* 60 5))
-(defparameter *announcements-sec* 3)
+(def *chain-poll-sec* 10)
+(def *slack-process-sec* 3)
+(def *slack-outgoing-sec* 3)
+(def *changelog-lax-sec* (* 60 5))
+(def *announcements-sec* 3)
 
-(def (flush-line s) (fresh-line) (write-string s) (finish-output))
-(def (prompt ) (flush-line "> "))
+(def (flush-line (s #f)) (newline) (when s (display s)) (force-output))
+(def (prompt) (flush-line "> "))
 
-(def (main-loop )
+(def (main-loop)
   (assert *lastblkhash*)
   (assert-changes-file-open)
   (srv-open *slack-srv*)
@@ -36,7 +37,7 @@
     (initiate-flush-changes)
     (srv-close *slack-srv*)))
 
-(def (main-loop1 )
+(def (main-loop1)
   (write-line "Started Main Loop. Input :terminate to terminate it.")
   (prompt)
   (let ((start (get-universal-time)))
@@ -73,7 +74,7 @@
                     (case expr
                       ((:terminate) (return))
                       (otherwise (print (eval expr)) (prompt))))))
-            (application-loop () )))
+            (application-loop ())))
         (srv-poll *slack-srv* 1)
         ;(sleep 2)
-        ))))
+        (void)))))
