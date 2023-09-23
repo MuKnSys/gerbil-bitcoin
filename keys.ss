@@ -2,10 +2,24 @@
 ;; https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki
 ;; https://github.com/bitcoin/bips/blob/master/bip-0043.mediawiki
 ;; https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki
-;; https://github.com/satoshilabs/slips/blob/master/slip-0044.md
+;; Purpose directory: https://github.com/satoshilabs/slips/blob/master/slip-0044.md
 ;; https://github.com/bitcoin/bips/blob/master/bip-0049.mediawiki
 ;; https://github.com/bitcoin/bips/blob/master/bip-0084.mediawiki
 ;; Alternative URLs https://en.bitcoin.it/wiki/BIP_0032 etc.
+;; Descriptors: https://github.com/bitcoin/bitcoin/blob/master/doc/descriptors.md
+;; m / purpose' / coin_type' / account' / change / address_index
+
+;; TODO: support
+;; 1. bitcoin-cli
+;; 3. Electrum
+;; 4. Exodus
+;; 6. Mycelium
+;; 7. Wallet of Satoshi
+;; 8. freewallet.io
+
+;; 2. Ledger
+;; 5. Trezor
+
 
 (export #t)
 

@@ -39,6 +39,8 @@
 (def (bitcoind-connection url (auth #f))
   (BitcoindConnection url auth))
 
+;; TODO: have one connection per endpoint? Per set of RPCs? (Blockchain, Control, Generating, Mining, Network, Rawtransactions, Util, Wallet) Looked from as many variables? From a single structure?
+
 ;; : (OrFalse BitcoindConnection)
 (def bitcoind-chain #f)
 
@@ -120,7 +122,7 @@
 ;;; Returns the hash of the best (tip) block
 ;;; in the most-work fully-validated chain.
 (define-bitcoin-api chain getbestblockhash
-  Bytes <-)
+  Hash <-)
 
 ;;; See https://developer.bitcoin.org/reference/rpc/getblock.html
 ;;; getblock "blockhash" ( verbosity )

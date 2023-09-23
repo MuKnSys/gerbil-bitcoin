@@ -76,3 +76,19 @@ We return a std/net/request#request.
 **** VM's bitcoind-chain-FOO is our bitcoind-chain
 **** VM's bitcoind-util-FOO is our bitcoind-keys
 **** Ask VM why Q in qcust
+**** TODO generate once an xPub for m/84'/0'/0'/1999857006'/0' (nat<-bytes (string->bytes "w3en"))
+m/
+And then everything can be generated from there.
+m/1999857006'/0' => web3-enabler SalesForce
+m/1999857006'/1' => web3-enabler Zoho
+
+m/1999857006'/0'/84'/0'/0'/0/0/1 => first receiving BIP84 address for web3-enabler SalesForce
+Store the xPub for m/1999857006'/0' or m/
+m/1999857006'/0' = X/84'/0'/0'
+
+
+X/0/2 == m/1999857006'/0'/0'/0/84'/0/2
+X/1/5 == m/84'/0'/0'/0/1999857006'/1/5
+
+****
+level 3 29
